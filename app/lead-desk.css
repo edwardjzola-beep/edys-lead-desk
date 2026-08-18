@@ -420,6 +420,22 @@ body {
   margin: 5px 0 0 !important;
   display: inline-flex !important;
 }
+.applicationBadge {
+  display: table;
+  margin-top: 6px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 9px;
+  font-weight: 750;
+}
+.applicationBadge.notOpened {
+  background: #ece8e2;
+  color: #706b65;
+}
+.applicationBadge.opened {
+  background: #e4f3eb;
+  color: #197652;
+}
 .rowTag {
   display: inline-flex;
   align-items: center;
@@ -769,6 +785,51 @@ body {
   font-size: 9px;
   font-weight: 850;
 }
+.applicationStatusRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #ded7cd;
+  border-radius: 9px;
+  background: #fff;
+  padding: 11px 12px;
+}
+.applicationStatusRow > div > span {
+  display: block;
+  color: var(--muted);
+  letter-spacing: 0.09em;
+  font-size: 8px;
+  font-weight: 800;
+}
+.applicationStatusRow strong {
+  display: block;
+  margin-top: 4px;
+  color: #706b65;
+  font-size: 12px;
+}
+.applicationStatusRow.opened {
+  border-color: #b8dcca;
+  background: #f0f8f4;
+}
+.applicationStatusRow.opened strong {
+  color: #197652;
+}
+.applicationStatusRow button {
+  border: 1px solid var(--teal);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.applicationStatusRow.notOpened button {
+  background: var(--teal);
+  color: #fff;
+}
 .stageCardHead strong {
   display: block;
   margin-top: 5px;
@@ -958,6 +1019,10 @@ body {
   .stageControls,
   .metadataGrid {
     grid-template-columns: 1fr;
+  }
+  .applicationStatusRow {
+    align-items: stretch;
+    flex-direction: column;
   }
   .drawerFoot {
     align-items: stretch;

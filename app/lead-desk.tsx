@@ -13,6 +13,7 @@ type Lead = {
   caseType: string;
   source: string;
   stage: string;
+  applicationOpened: boolean;
   status: string;
   nextAction: string;
   followUpDate: string;
@@ -152,6 +153,7 @@ function makeBlank() {
     contactMethod: walkInMethods[0],
     agentName: "",
     stage: "New enquiry",
+    applicationOpened: false,
     nextAction: "Reply to enquiry",
     followUpDate: d.toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" }),
     summary: "",
@@ -227,6 +229,15 @@ function ContactCell({ lead }: { lead: Lead }) {
             ) : null;
           })}
         </span>
+        {lead.caseType === "Student / parent enquiry" && (
+          <span
+            className={`applicationBadge ${lead.applicationOpened ? "opened" : "notOpened"}`}
+          >
+            {lead.applicationOpened
+              ? "Application opened"
+              : "Application not opened"}
+          </span>
+        )}
       </b>
     </span>
   );
@@ -258,6 +269,7 @@ export default function LeadDesk() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [applicationFilter, setApplicationFilter] = useState("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const [completing, setCompleting] = useState<Lead | null>(null);
   const [completionChoice, setCompletionChoice] = useState<
@@ -339,6 +351,12 @@ export default function LeadDesk() {
           walkInMethodFromSource(l.source) === methodFilter);
       const matchesTag =
         tagFilter === "all" || readTags(l.tags).includes(tagFilter);
+      const matchesApplication =
+        applicationFilter === "all" ||
+        (l.caseType === "Student / parent enquiry" &&
+          (applicationFilter === "opened"
+            ? l.applicationOpened
+            : !l.applicationOpened));
       const matchesDue =
         dueFilter === "all" ||
         (dueFilter === "overdue" &&
@@ -357,6 +375,7 @@ export default function LeadDesk() {
         matchesSource &&
         matchesMethod &&
         matchesTag &&
+        matchesApplication &&
         matchesDue;
       if (view === "attention")
         return (
@@ -398,6 +417,7 @@ export default function LeadDesk() {
     sourceFilter,
     methodFilter,
     tagFilter,
+    applicationFilter,
   ]);
 
   function updateType(type: string) {
@@ -549,6 +569,7 @@ export default function LeadDesk() {
         caseType: selected.caseType,
         source: selected.source,
         stage: selected.stage,
+        applicationOpened: selected.applicationOpened,
         status: selected.status,
         nextAction: selected.nextAction,
         followUpDate: selected.followUpDate,
@@ -604,6 +625,43 @@ export default function LeadDesk() {
       setActivitiesList((current) => [activityData.activity, ...current]);
     }
     setNotice(`Stage updated to ${selected.stage}.`);
+    setTimeout(() => setNotice(""), 2800);
+  }
+  async function updateApplicationOpened(applicationOpened: boolean) {
+    if (!selected) return;
+    const response = await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: selected.id, applicationOpened }),
+    });
+    if (!response.ok) {
+      setNotice("Could not update the application status.");
+      setTimeout(() => setNotice(""), 3200);
+      return;
+    }
+    const data = await response.json();
+    const updated = data.lead ?? { ...selected, applicationOpened };
+    setLeads((current) =>
+      current.map((lead) => (lead.id === updated.id ? updated : lead)),
+    );
+    setSelected(updated);
+    const note = applicationOpened
+      ? "Parent opened the online application."
+      : "Application marked as not opened.";
+    const activityResponse = await recordActivity(
+      selected.id,
+      "Application status updated",
+      note,
+    );
+    if (activityResponse.ok) {
+      const activityData = await activityResponse.json();
+      setActivitiesList((current) => [activityData.activity, ...current]);
+    }
+    setNotice(
+      applicationOpened
+        ? "Application marked as opened."
+        : "Application marked as not opened.",
+    );
     setTimeout(() => setNotice(""), 2800);
   }
   async function deleteCase() {
@@ -912,12 +970,24 @@ export default function LeadDesk() {
                 ))}
               </select>
             </label>
+            <label>
+              Application
+              <select
+                value={applicationFilter}
+                onChange={(e) => setApplicationFilter(e.target.value)}
+              >
+                <option value="all">Any application status</option>
+                <option value="not_opened">Not opened</option>
+                <option value="opened">Opened</option>
+              </select>
+            </label>
             {(caseFilter !== "all" ||
               stageFilter !== "all" ||
               dueFilter !== "all" ||
               sourceFilter !== "all" ||
               methodFilter !== "all" ||
-              tagFilter !== "all") && (
+              tagFilter !== "all" ||
+              applicationFilter !== "all") && (
               <button
                 type="button"
                 onClick={() => {
@@ -927,6 +997,7 @@ export default function LeadDesk() {
                   setSourceFilter("all");
                   setMethodFilter("all");
                   setTagFilter("all");
+                  setApplicationFilter("all");
                 }}
               >
                 Clear filters
@@ -1409,6 +1480,30 @@ export default function LeadDesk() {
               </div>
               <div className="detail metadataCard">
                 <span className="metadataTitle">LEAD CLASSIFICATION</span>
+                {selected.caseType === "Student / parent enquiry" && (
+                  <div
+                    className={`applicationStatusRow ${selected.applicationOpened ? "opened" : "notOpened"}`}
+                  >
+                    <div>
+                      <span>APPLICATION</span>
+                      <strong>
+                        {selected.applicationOpened
+                          ? "Application opened"
+                          : "Application not opened"}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateApplicationOpened(!selected.applicationOpened)
+                      }
+                    >
+                      {selected.applicationOpened
+                        ? "Mark as not opened"
+                        : "Mark as opened"}
+                    </button>
+                  </div>
+                )}
                 <div className="metadataGrid">
                   <label>
                     Case type
