@@ -1,5 +1,5 @@
-const SUPABASE_URL = Netlify.env.get("SUPABASE_URL");
-const SUPABASE_SECRET_KEY = Netlify.env.get("SUPABASE_SECRET_KEY");
+const SUPABASE_URL = process.env.SUPABASE_URL ?? Netlify.env.get("SUPABASE_URL");
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY ?? Netlify.env.get("SUPABASE_SECRET_KEY");
 
 export async function db(path: string, init: RequestInit = {}) {
   if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) return Response.json({ error: "Database is not configured" }, { status: 503 });
