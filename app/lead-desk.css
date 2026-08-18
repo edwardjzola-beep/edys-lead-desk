@@ -664,6 +664,9 @@ body {
 .work .tableRow {
   grid-template-columns: 1.25fr 1fr 0.95fr 0.85fr 1.35fr 0.65fr 84px;
 }
+.work .tableRow.todoRow {
+  grid-template-columns: 0.75fr 1.6fr 1.2fr 1fr 0.9fr 0.85fr 84px;
+}
 .rowControl {
   display: flex;
   justify-content: flex-end;
@@ -1017,6 +1020,16 @@ body {
   .work .tableRow > span:nth-child(6) {
     display: none;
   }
+  .work .tableRow.todoRow {
+    grid-template-columns: 0.75fr 1.6fr 1.2fr 1fr 84px;
+  }
+  .work .tableRow.todoRow > span:nth-child(2) {
+    display: block;
+  }
+  .work .tableRow.todoRow > span:nth-child(5),
+  .work .tableRow.todoRow > span:nth-child(6) {
+    display: none;
+  }
 }
 @media (max-width: 760px) {
   .appShell {
@@ -1104,6 +1117,18 @@ body {
   .work .tableRow > span:nth-child(6) {
     display: none;
   }
+  .work .tableRow.todoRow {
+    grid-template-columns: 0.7fr 1.5fr 1.05fr 78px;
+  }
+  .work .tableRow.todoRow > span:nth-child(2),
+  .work .tableRow.todoRow > span:nth-child(3) {
+    display: block;
+  }
+  .work .tableRow.todoRow > span:nth-child(4),
+  .work .tableRow.todoRow > span:nth-child(5),
+  .work .tableRow.todoRow > span:nth-child(6) {
+    display: none;
+  }
   .contact i {
     flex: none;
   }
@@ -1158,6 +1183,9 @@ body {
       72px;
     gap: 8px;
     padding: 13px 10px;
+  }
+  .work .tableRow.todoRow {
+    grid-template-columns: 0.7fr minmax(0, 1.45fr) minmax(0, 1fr) 72px;
   }
   .contact > i {
     display: none;
