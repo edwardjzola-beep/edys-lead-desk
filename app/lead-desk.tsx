@@ -174,6 +174,11 @@ function agentFromSource(source: string) {
     ? source.slice(AGENT_PREFIX.length)
     : "";
 }
+function currentCaseType(caseType: string) {
+  if (caseTypes.includes(caseType)) return caseType;
+  if (caseType === "Walk-in enquiry") return "Student / parent enquiry";
+  return "Agent partnership";
+}
 function readTags(value: string | undefined) {
   try {
     return JSON.parse(value || "[]") as string[];
@@ -516,10 +521,7 @@ export default function LeadDesk() {
             className={view === "converted" ? "active" : ""}
             onClick={() => setView("converted")}
           >
-            <span>✓</span>Converted{" "}
-            <em>
-              {leads.filter((lead) => lead.status === "converted").length}
-            </em>
+            <span>✓</span>Converted
           </button>
           <button
             className={`${view === "attention" ? "active " : ""}${overdue + dueToday > 0 ? "attentionAlert" : ""}`}
@@ -706,7 +708,12 @@ export default function LeadDesk() {
                 <button
                   className="tableRow leadRow"
                   key={lead.id}
-                  onClick={() => setSelected(lead)}
+                  onClick={() =>
+                    setSelected({
+                      ...lead,
+                      caseType: currentCaseType(lead.caseType),
+                    })
+                  }
                 >
                   <span className="contact">
                     <i>
@@ -997,7 +1004,10 @@ export default function LeadDesk() {
                     setSelected({ ...selected, stage: e.target.value })
                   }
                 >
-                  {stageMap[selected.caseType].map((x) => (
+                  {(
+                    stageMap[selected.caseType] ??
+                    stageMap["Student / parent enquiry"]
+                  ).map((x) => (
                     <option key={x}>{x}</option>
                   ))}
                 </select>
