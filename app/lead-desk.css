@@ -672,18 +672,19 @@ body {
   justify-content: flex-end;
 }
 .rowControl button {
-  border: 1px solid #c9ded9;
+  border: 1px solid #197652;
   border-radius: 7px;
-  background: #edf6f3;
-  color: var(--teal);
+  background: #197652;
+  color: #fff;
   cursor: pointer;
-  padding: 7px 9px;
-  font-size: 10px;
-  font-weight: 750;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 3px 9px #1976522e;
 }
 .rowControl button:hover {
-  background: var(--teal);
-  color: #fff;
+  background: #0f5f40;
+  border-color: #0f5f40;
 }
 .sourcePill {
   display: inline-block;
