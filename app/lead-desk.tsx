@@ -312,6 +312,9 @@ export default function LeadDesk() {
   const dueToday = leads.filter(
     (l) => l.status === "active" && l.followUpDate === today,
   ).length;
+  const capturedSinceStart = leads.filter(
+    (lead) => lead.createdAt.slice(0, 10) >= "2026-08-17",
+  ).length;
   const agentNames = Array.from(
     new Set(leads.map((lead) => agentFromSource(lead.source)).filter(Boolean)),
   ).sort();
@@ -644,6 +647,12 @@ export default function LeadDesk() {
             </em>
           </button>
           <button
+            className={`${view === "attention" ? "active " : ""}${overdue + dueToday > 0 ? "attentionAlert" : ""}`}
+            onClick={() => setView("attention")}
+          >
+            <span>!</span>Needs attention <em>{overdue + dueToday}</em>
+          </button>
+          <button
             className={view === "all" ? "active" : ""}
             onClick={() => setView("all")}
           >
@@ -672,12 +681,6 @@ export default function LeadDesk() {
             onClick={() => setView("closed")}
           >
             <span>×</span>Closed
-          </button>
-          <button
-            className={`${view === "attention" ? "active " : ""}${overdue + dueToday > 0 ? "attentionAlert" : ""}`}
-            onClick={() => setView("attention")}
-          >
-            <span>!</span>Needs attention <em>{overdue + dueToday}</em>
           </button>
         </nav>
         <div className="sidebarFoot">
@@ -716,8 +719,8 @@ export default function LeadDesk() {
           </article>
           <article>
             <span>NEW THIS MONTH</span>
-            <strong>{leads.length}</strong>
-            <p>Captured since 1 August</p>
+            <strong>{capturedSinceStart}</strong>
+            <p>Captured since 17 August</p>
           </article>
           <article>
             <span>UPCOMING PROGRAMMES</span>
