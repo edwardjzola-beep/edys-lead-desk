@@ -569,6 +569,43 @@ export default function LeadDesk() {
     setNotice("Contact and case details updated.");
     setTimeout(() => setNotice(""), 2800);
   }
+  async function updateStage() {
+    if (!selected) return;
+    const savedLead = leads.find((lead) => lead.id === selected.id);
+    const previousStage = savedLead?.stage ?? "Previous stage";
+    if (previousStage === selected.stage) {
+      setNotice("This lead is already at that stage.");
+      setTimeout(() => setNotice(""), 2600);
+      return;
+    }
+    const response = await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: selected.id, stage: selected.stage }),
+    });
+    if (!response.ok) {
+      setNotice("Could not update the pipeline stage.");
+      setTimeout(() => setNotice(""), 3200);
+      return;
+    }
+    const data = await response.json();
+    const updated = data.lead ?? selected;
+    setLeads((current) =>
+      current.map((lead) => (lead.id === updated.id ? updated : lead)),
+    );
+    setSelected(updated);
+    const activityResponse = await recordActivity(
+      selected.id,
+      "Stage updated",
+      `${previousStage} → ${selected.stage}`,
+    );
+    if (activityResponse.ok) {
+      const activityData = await activityResponse.json();
+      setActivitiesList((current) => [activityData.activity, ...current]);
+    }
+    setNotice(`Stage updated to ${selected.stage}.`);
+    setTimeout(() => setNotice(""), 2800);
+  }
   async function deleteCase() {
     if (!selected) return;
     if (
@@ -1249,21 +1286,33 @@ export default function LeadDesk() {
                   />
                 </label>
               </div>
-              <div className="detailPair">
-                <label>Pipeline stage</label>
-                <select
-                  value={selected.stage}
-                  onChange={(e) =>
-                    setSelected({ ...selected, stage: e.target.value })
-                  }
-                >
-                  {(
-                    stageMap[selected.caseType] ??
-                    stageMap["Student / parent enquiry"]
-                  ).map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
+              <div className="detailPair stageCard">
+                <div className="stageCardHead">
+                  <div>
+                    <span>CURRENT PIPELINE STAGE</span>
+                    <strong>{selected.stage}</strong>
+                  </div>
+                  <small>Important lead progress</small>
+                </div>
+                <div className="stageControls">
+                  <select
+                    aria-label="Pipeline stage"
+                    value={selected.stage}
+                    onChange={(e) =>
+                      setSelected({ ...selected, stage: e.target.value })
+                    }
+                  >
+                    {(
+                      stageMap[selected.caseType] ??
+                      stageMap["Student / parent enquiry"]
+                    ).map((x) => (
+                      <option key={x}>{x}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={updateStage}>
+                    Update stage
+                  </button>
+                </div>
               </div>
               <div className="tagPicker">
                 <label>Colour tags</label>
@@ -1358,83 +1407,88 @@ export default function LeadDesk() {
                   placeholder="Paste the incoming email or key conversation details…"
                 />
               </div>
-              <div className="detail editDetail">
-                <label>Case type</label>
-                <select
-                  value={selected.caseType}
-                  onChange={(e) => {
-                    const caseType = e.target.value;
-                    setSelected({
-                      ...selected,
-                      caseType,
-                      stage: stageMap[caseType][0],
-                    });
-                  }}
-                >
-                  {caseTypes.map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="detail editDetail">
-                <label>Source</label>
-                <select
-                  value={sourceType(selected.source)}
-                  onChange={(e) => {
-                    const source = e.target.value;
-                    setSelected({
-                      ...selected,
-                      source:
-                        source === "Agent"
-                          ? AGENT_PREFIX
-                          : `${WALK_IN_PREFIX}${walkInMethods[0]}`,
-                    });
-                  }}
-                >
-                  {sources.map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
-                {sourceType(selected.source) === "Walk In" && (
-                  <label className="agentNameField">
-                    Walk In method
+              <div className="detail metadataCard">
+                <span className="metadataTitle">LEAD CLASSIFICATION</span>
+                <div className="metadataGrid">
+                  <label>
+                    Case type
                     <select
-                      value={walkInMethodFromSource(selected.source)}
-                      onChange={(e) =>
+                      value={selected.caseType}
+                      onChange={(e) => {
+                        const caseType = e.target.value;
                         setSelected({
                           ...selected,
-                          source: `${WALK_IN_PREFIX}${e.target.value}`,
-                        })
-                      }
+                          caseType,
+                          stage: stageMap[caseType][0],
+                        });
+                      }}
                     >
-                      {walkInMethods.map((method) => (
-                        <option key={method}>{method}</option>
+                      {caseTypes.map((x) => (
+                        <option key={x}>{x}</option>
                       ))}
                     </select>
                   </label>
-                )}
-                {sourceType(selected.source) === "Agent" && (
-                  <label className="agentNameField">
-                    Agent name
-                    <input
-                      required
-                      list="edit-agent-names"
-                      value={agentFromSource(selected.source)}
-                      onChange={(e) =>
+                  <label>
+                    Source
+                    <select
+                      value={sourceType(selected.source)}
+                      onChange={(e) => {
+                        const source = e.target.value;
                         setSelected({
                           ...selected,
-                          source: `${AGENT_PREFIX}${e.target.value}`,
-                        })
-                      }
-                      placeholder="Type or select an agent"
-                    />
-                    <datalist id="edit-agent-names">
-                      {agentNames.map((name) => (
-                        <option key={name} value={name} />
+                          source:
+                            source === "Agent"
+                              ? AGENT_PREFIX
+                              : `${WALK_IN_PREFIX}${walkInMethods[0]}`,
+                        });
+                      }}
+                    >
+                      {sources.map((x) => (
+                        <option key={x}>{x}</option>
                       ))}
-                    </datalist>
+                    </select>
                   </label>
-                )}
+                  {sourceType(selected.source) === "Walk In" && (
+                    <label>
+                      Walk In method
+                      <select
+                        value={walkInMethodFromSource(selected.source)}
+                        onChange={(e) =>
+                          setSelected({
+                            ...selected,
+                            source: `${WALK_IN_PREFIX}${e.target.value}`,
+                          })
+                        }
+                      >
+                        {walkInMethods.map((method) => (
+                          <option key={method}>{method}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {sourceType(selected.source) === "Agent" && (
+                    <label>
+                      Agent name
+                      <input
+                        required
+                        list="edit-agent-names"
+                        value={agentFromSource(selected.source)}
+                        onChange={(e) =>
+                          setSelected({
+                            ...selected,
+                            source: `${AGENT_PREFIX}${e.target.value}`,
+                          })
+                        }
+                        placeholder="Type or select an agent"
+                      />
+                      <datalist id="edit-agent-names">
+                        {agentNames.map((name) => (
+                          <option key={name} value={name} />
+                        ))}
+                      </datalist>
+                    </label>
+                  )}
+                </div>
               </div>
             </div>
             <div className="drawerFoot">
