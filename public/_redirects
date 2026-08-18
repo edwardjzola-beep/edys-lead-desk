@@ -1,0 +1,3 @@
+/api/leads  /.netlify/functions/leads  200!
+/api/activities  /.netlify/functions/activities  200!
+/*  /index.html  200
