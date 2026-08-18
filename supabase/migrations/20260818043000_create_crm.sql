@@ -1,4 +1,3 @@
- 1 file changed, 20 deletions(-)
 create table public.leads (
   id bigint primary key,
   contact_name text not null,
