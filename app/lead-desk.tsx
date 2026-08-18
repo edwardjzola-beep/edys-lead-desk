@@ -190,6 +190,9 @@ export default function LeadDesk() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(makeBlank);
   const [query, setQuery] = useState("");
+  const [caseFilter, setCaseFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [dueFilter, setDueFilter] = useState("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const [notice, setNotice] = useState("");
   const [online, setOnline] = useState(false);
@@ -198,6 +201,11 @@ export default function LeadDesk() {
   const [actionNote, setActionNote] = useState("");
   const selectedId = selected?.id;
   const today = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "Asia/Singapore",
+  });
+  const nextSevenDate = new Date();
+  nextSevenDate.setDate(nextSevenDate.getDate() + 7);
+  const nextSeven = nextSevenDate.toLocaleDateString("sv-SE", {
     timeZone: "Asia/Singapore",
   });
   const todayLabel = new Date()
@@ -232,6 +240,10 @@ export default function LeadDesk() {
   const dueToday = leads.filter(
     (l) => l.status === "active" && l.followUpDate === today,
   ).length;
+  const availableStages =
+    caseFilter === "all"
+      ? Array.from(new Set(leads.map((lead) => lead.stage))).sort()
+      : (stageMap[caseFilter] ?? []);
   const filtered = useMemo(() => {
     const rows = leads.filter((l) => {
       const matches =
@@ -239,25 +251,51 @@ export default function LeadDesk() {
         `${l.contactName} ${l.organization} ${l.country} ${l.nextAction}`
           .toLowerCase()
           .includes(query.toLowerCase());
+      const matchesCase = caseFilter === "all" || l.caseType === caseFilter;
+      const matchesStage = stageFilter === "all" || l.stage === stageFilter;
+      const matchesDue =
+        dueFilter === "all" ||
+        (dueFilter === "overdue" &&
+          Boolean(l.followUpDate) &&
+          l.followUpDate < today) ||
+        (dueFilter === "today" && l.followUpDate === today) ||
+        (dueFilter === "next7" &&
+          l.followUpDate > today &&
+          l.followUpDate <= nextSeven) ||
+        (dueFilter === "later" && l.followUpDate > nextSeven) ||
+        (dueFilter === "nodate" && !l.followUpDate);
+      const matchesFilters =
+        matches && matchesCase && matchesStage && matchesDue;
       if (view === "attention")
-        return matches && l.status === "active" && l.followUpDate <= today;
+        return (
+          matchesFilters && l.status === "active" && l.followUpDate <= today
+        );
       if (view === "todo")
-        return matches && l.status === "active" && Boolean(l.nextAction);
+        return matchesFilters && l.status === "active" && Boolean(l.nextAction);
       if (view === "programmes")
         return (
-          matches &&
+          matchesFilters &&
           ["Exchange / immersion", "Campus / group visit"].includes(l.caseType)
         );
       if (view === "partnerships")
-        return matches && l.caseType.includes("partnership");
-      return matches;
+        return matchesFilters && l.caseType.includes("partnership");
+      return matchesFilters;
     });
     return view === "todo"
       ? [...rows].sort((a, b) =>
           (a.followUpDate || "9999").localeCompare(b.followUpDate || "9999"),
         )
       : rows;
-  }, [leads, view, query, today]);
+  }, [
+    leads,
+    view,
+    query,
+    today,
+    nextSeven,
+    caseFilter,
+    stageFilter,
+    dueFilter,
+  ]);
 
   function updateType(type: string) {
     setForm({ ...form, caseType: type, stage: stageMap[type][0] });
@@ -551,6 +589,67 @@ export default function LeadDesk() {
               />
             </label>
           </div>
+          <div className="filterBar">
+            <label>
+              Case type
+              <select
+                value={caseFilter}
+                onChange={(e) => {
+                  setCaseFilter(e.target.value);
+                  setStageFilter("all");
+                }}
+              >
+                <option value="all">All case types</option>
+                {caseTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Stage
+              <select
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value)}
+              >
+                <option value="all">All stages</option>
+                {availableStages.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Follow-up urgency
+              <select
+                value={dueFilter}
+                onChange={(e) => setDueFilter(e.target.value)}
+              >
+                <option value="all">Any follow-up date</option>
+                <option value="overdue">Overdue</option>
+                <option value="today">Due today</option>
+                <option value="next7">Next 7 days</option>
+                <option value="later">Later</option>
+                <option value="nodate">No date set</option>
+              </select>
+            </label>
+            {(caseFilter !== "all" ||
+              stageFilter !== "all" ||
+              dueFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCaseFilter("all");
+                  setStageFilter("all");
+                  setDueFilter("all");
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
           <div className="table">
             <div className="tableRow tableHeader">
               <span>Contact</span>
@@ -753,200 +852,240 @@ export default function LeadDesk() {
         </div>
       )}
       {selected && (
-        <div className="drawer">
-          <div className="drawerHead">
-            <button onClick={() => setSelected(null)}>×</button>
-            <p className="eyebrow">CASE #{String(selected.id).slice(-4)}</p>
-            <h2>{selected.contactName}</h2>
-            <p>
-              {selected.organization || selected.caseType} ·{" "}
-              {selected.country || selected.source}
-            </p>
-          </div>
-          <div className="drawerBody">
-            <div className="contactEditor">
-              <label>
-                Contact name*
-                <input required value={selected.contactName} onChange={(e) => setSelected({ ...selected, contactName: e.target.value })} />
-              </label>
-              <label>
-                Organisation
-                <input value={selected.organization} onChange={(e) => setSelected({ ...selected, organization: e.target.value })} />
-              </label>
-              <label>
-                Email
-                <input type="email" value={selected.email} onChange={(e) => setSelected({ ...selected, email: e.target.value })} />
-              </label>
-              <label>
-                Phone
-                <input value={selected.phone} onChange={(e) => setSelected({ ...selected, phone: e.target.value })} />
-              </label>
-              <label>
-                Country
-                <input value={selected.country} onChange={(e) => setSelected({ ...selected, country: e.target.value })} />
-              </label>
+        <div
+          className="caseOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${selected.contactName} case details`}
+        >
+          <div className="drawer caseView">
+            <div className="drawerHead">
+              <button onClick={() => setSelected(null)}>×</button>
+              <p className="eyebrow">CASE #{String(selected.id).slice(-4)}</p>
+              <h2>{selected.contactName}</h2>
+              <p>
+                {selected.organization || selected.caseType} ·{" "}
+                {selected.country || selected.source}
+              </p>
             </div>
-            <div className="detailPair">
-              <label>Pipeline stage</label>
-              <select
-                value={selected.stage}
-                onChange={(e) =>
-                  setSelected({ ...selected, stage: e.target.value })
-                }
-              >
-                {stageMap[selected.caseType].map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-            <div className="tagPicker">
-              <label>Colour tags</label>
-              <div>
-                {tagOptions.map((t) => (
-                  <button
-                    type="button"
-                    key={t.key}
-                    className={`tagChoice tag-${t.colour} ${readTags(selected.tags).includes(t.key) ? "selected" : ""}`}
-                    onClick={() => toggleTag(t.key)}
-                  >
-                    <i></i>
-                    {t.label}
-                  </button>
-                ))}
+            <div className="drawerBody">
+              <div className="contactEditor">
+                <label>
+                  Contact name*
+                  <input
+                    required
+                    value={selected.contactName}
+                    onChange={(e) =>
+                      setSelected({ ...selected, contactName: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Organisation
+                  <input
+                    value={selected.organization}
+                    onChange={(e) =>
+                      setSelected({ ...selected, organization: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={selected.email}
+                    onChange={(e) =>
+                      setSelected({ ...selected, email: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Phone
+                  <input
+                    value={selected.phone}
+                    onChange={(e) =>
+                      setSelected({ ...selected, phone: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Country
+                  <input
+                    value={selected.country}
+                    onChange={(e) =>
+                      setSelected({ ...selected, country: e.target.value })
+                    }
+                  />
+                </label>
               </div>
-              <small>
-                See the legend on the main desk for what each colour means.
-              </small>
-            </div>
-            <div className="nextBox">
-              <span>NEXT ACTION</span>
-              <input
-                value={selected.nextAction}
-                onChange={(e) =>
-                  setSelected({ ...selected, nextAction: e.target.value })
-                }
-              />
-              <input
-                type="date"
-                value={selected.followUpDate}
-                onChange={(e) =>
-                  setSelected({ ...selected, followUpDate: e.target.value })
-                }
-              />
-              <button onClick={openTasks}>✓ Open to-do list</button>
-            </div>
-            <form className="activityForm" onSubmit={addActivity}>
-              <label>Record a contact action</label>
-              <div>
+              <div className="detailPair">
+                <label>Pipeline stage</label>
                 <select
-                  value={actionType}
-                  onChange={(e) => setActionType(e.target.value)}
+                  value={selected.stage}
+                  onChange={(e) =>
+                    setSelected({ ...selected, stage: e.target.value })
+                  }
                 >
-                  {actionTypes.map((x) => (
+                  {stageMap[selected.caseType].map((x) => (
                     <option key={x}>{x}</option>
                   ))}
                 </select>
-                <input
-                  value={actionNote}
-                  onChange={(e) => setActionNote(e.target.value)}
-                  placeholder="What happened?"
-                />
-                <button>＋ Add</button>
               </div>
-            </form>
-            <div className="timeline">
-              <label>Contact history</label>
-              {activitiesList.length ? (
-                activitiesList.map((a) => (
-                  <article key={a.id}>
-                    <i></i>
-                    <div>
-                      <b>{a.kind}</b>
-                      <time>
-                        {new Date(a.createdAt).toLocaleString("en-SG", {
-                          timeZone: "Asia/Singapore",
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </time>
-                      <p>{a.note}</p>
-                    </div>
-                  </article>
-                ))
-              ) : (
-                <p className="noActivity">No recorded actions yet.</p>
-              )}
+              <div className="tagPicker">
+                <label>Colour tags</label>
+                <div>
+                  {tagOptions.map((t) => (
+                    <button
+                      type="button"
+                      key={t.key}
+                      className={`tagChoice tag-${t.colour} ${readTags(selected.tags).includes(t.key) ? "selected" : ""}`}
+                      onClick={() => toggleTag(t.key)}
+                    >
+                      <i></i>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <small>
+                  See the legend on the main desk for what each colour means.
+                </small>
+              </div>
+              <div className="nextBox">
+                <span>NEXT ACTION</span>
+                <input
+                  value={selected.nextAction}
+                  onChange={(e) =>
+                    setSelected({ ...selected, nextAction: e.target.value })
+                  }
+                />
+                <input
+                  type="date"
+                  value={selected.followUpDate}
+                  onChange={(e) =>
+                    setSelected({ ...selected, followUpDate: e.target.value })
+                  }
+                />
+                <button onClick={openTasks}>✓ Open to-do list</button>
+              </div>
+              <form className="activityForm" onSubmit={addActivity}>
+                <label>Record a contact action</label>
+                <div>
+                  <select
+                    value={actionType}
+                    onChange={(e) => setActionType(e.target.value)}
+                  >
+                    {actionTypes.map((x) => (
+                      <option key={x}>{x}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={actionNote}
+                    onChange={(e) => setActionNote(e.target.value)}
+                    placeholder="What happened?"
+                  />
+                  <button>＋ Add</button>
+                </div>
+              </form>
+              <div className="timeline">
+                <label>Contact history</label>
+                {activitiesList.length ? (
+                  activitiesList.map((a) => (
+                    <article key={a.id}>
+                      <i></i>
+                      <div>
+                        <b>{a.kind}</b>
+                        <time>
+                          {new Date(a.createdAt).toLocaleString("en-SG", {
+                            timeZone: "Asia/Singapore",
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </time>
+                        <p>{a.note}</p>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <p className="noActivity">No recorded actions yet.</p>
+                )}
+              </div>
+              <div className="detail editDetail">
+                <label>Conversation summary</label>
+                <textarea
+                  value={selected.summary}
+                  onChange={(e) =>
+                    setSelected({ ...selected, summary: e.target.value })
+                  }
+                  placeholder="Paste the incoming email or key conversation details…"
+                />
+              </div>
+              <div className="detail editDetail">
+                <label>Email reply draft</label>
+                <textarea
+                  value={selected.emailDraft}
+                  onChange={(e) =>
+                    setSelected({ ...selected, emailDraft: e.target.value })
+                  }
+                  placeholder="Save the reply draft here, then copy it to Outlook."
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(selected.emailDraft);
+                    setNotice("Email draft copied for Outlook.");
+                    setTimeout(() => setNotice(""), 2800);
+                  }}
+                >
+                  Copy draft
+                </button>
+              </div>
+              <div className="detail editDetail">
+                <label>Case type</label>
+                <select
+                  value={selected.caseType}
+                  onChange={(e) => {
+                    const caseType = e.target.value;
+                    setSelected({
+                      ...selected,
+                      caseType,
+                      stage: stageMap[caseType][0],
+                    });
+                  }}
+                >
+                  {caseTypes.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="detail editDetail">
+                <label>Source</label>
+                <select
+                  value={selected.source}
+                  onChange={(e) =>
+                    setSelected({ ...selected, source: e.target.value })
+                  }
+                >
+                  {sources.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="detail editDetail">
-              <label>Conversation summary</label>
-              <textarea
-                value={selected.summary}
-                onChange={(e) =>
-                  setSelected({ ...selected, summary: e.target.value })
-                }
-                placeholder="Paste the incoming email or key conversation details…"
-              />
-            </div>
-            <div className="detail editDetail">
-              <label>Email reply draft</label>
-              <textarea
-                value={selected.emailDraft}
-                onChange={(e) =>
-                  setSelected({ ...selected, emailDraft: e.target.value })
-                }
-                placeholder="Save the reply draft here, then copy it to Outlook."
-              />
-              <button
-                onClick={() => {
-                  navigator.clipboard?.writeText(selected.emailDraft);
-                  setNotice("Email draft copied for Outlook.");
-                  setTimeout(() => setNotice(""), 2800);
-                }}
-              >
-                Copy draft
+            <div className="drawerFoot">
+              <button className="danger" onClick={deleteCase}>
+                Delete case
               </button>
+              <span className="drawerActions">
+                <button className="secondary" onClick={saveCase}>
+                  Save changes
+                </button>
+                <button className="success" onClick={() => markDone(selected)}>
+                  ✓ Mark converted
+                </button>
+              </span>
             </div>
-            <div className="detail editDetail">
-              <label>Case type</label>
-              <select
-                value={selected.caseType}
-                onChange={(e) => {
-                  const caseType = e.target.value;
-                  setSelected({
-                    ...selected,
-                    caseType,
-                    stage: stageMap[caseType][0],
-                  });
-                }}
-              >
-                {caseTypes.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-            <div className="detail editDetail">
-              <label>Source</label>
-              <select
-                value={selected.source}
-                onChange={(e) =>
-                  setSelected({ ...selected, source: e.target.value })
-                }
-              >
-                {sources.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="drawerFoot">
-            <button className="danger" onClick={deleteCase}>Delete case</button>
-            <span className="drawerActions">
-              <button className="secondary" onClick={saveCase}>Save changes</button>
-              <button className="success" onClick={() => markDone(selected)}>✓ Mark converted</button>
-            </span>
           </div>
         </div>
       )}
