@@ -43,16 +43,8 @@ const caseTypes = [
   "Exchange / immersion",
   "Campus / group visit",
 ];
-const sources = [
-  "Outlook email",
-  "Website form",
-  "WhatsApp",
-  "Walk-in",
-  "Agent",
-  "Phone",
-  "Social media",
-  "Staff referral",
-];
+const sources = ["Walk In", "Agent"];
+const walkInMethods = ["Call", "Email", "Website form", "Social", "Referral"];
 const tagOptions = [
   {
     key: "hot",
@@ -156,6 +148,7 @@ function makeBlank() {
     country: "",
     caseType: caseTypes[0],
     source: sources[0],
+    contactMethod: walkInMethods[0],
     agentName: "",
     stage: "New enquiry",
     nextAction: "Reply to enquiry",
@@ -166,13 +159,29 @@ function makeBlank() {
   };
 }
 const AGENT_PREFIX = "Agent · ";
+const WALK_IN_PREFIX = "Walk In · ";
 function sourceType(source: string) {
-  return source.startsWith(AGENT_PREFIX) ? "Agent" : source;
+  return source === "Agent" || source.startsWith(AGENT_PREFIX)
+    ? "Agent"
+    : "Walk In";
 }
 function agentFromSource(source: string) {
   return source.startsWith(AGENT_PREFIX)
     ? source.slice(AGENT_PREFIX.length)
     : "";
+}
+function walkInMethodFromSource(source: string) {
+  if (source.startsWith(WALK_IN_PREFIX)) {
+    return source.slice(WALK_IN_PREFIX.length);
+  }
+  if (["Outlook email", "Email"].includes(source)) return "Email";
+  if (source === "Website form") return "Website form";
+  if (["Phone", "Walk-in / phone"].includes(source)) return "Call";
+  if (["Social media", "WhatsApp"].includes(source)) return "Social";
+  if (["Staff referral", "Staff / agent referral"].includes(source)) {
+    return "Referral";
+  }
+  return walkInMethods[0];
 }
 function currentCaseType(caseType: string) {
   if (caseTypes.includes(caseType)) return caseType;
@@ -196,6 +205,9 @@ export default function LeadDesk() {
   const [caseFilter, setCaseFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const [notice, setNotice] = useState("");
   const [online, setOnline] = useState(false);
@@ -259,6 +271,14 @@ export default function LeadDesk() {
           .includes(query.toLowerCase());
       const matchesCase = caseFilter === "all" || l.caseType === caseFilter;
       const matchesStage = stageFilter === "all" || l.stage === stageFilter;
+      const matchesSource =
+        sourceFilter === "all" || sourceType(l.source) === sourceFilter;
+      const matchesMethod =
+        methodFilter === "all" ||
+        (sourceType(l.source) === "Walk In" &&
+          walkInMethodFromSource(l.source) === methodFilter);
+      const matchesTag =
+        tagFilter === "all" || readTags(l.tags).includes(tagFilter);
       const matchesDue =
         dueFilter === "all" ||
         (dueFilter === "overdue" &&
@@ -271,7 +291,13 @@ export default function LeadDesk() {
         (dueFilter === "later" && l.followUpDate > nextSeven) ||
         (dueFilter === "nodate" && !l.followUpDate);
       const matchesFilters =
-        matches && matchesCase && matchesStage && matchesDue;
+        matches &&
+        matchesCase &&
+        matchesStage &&
+        matchesSource &&
+        matchesMethod &&
+        matchesTag &&
+        matchesDue;
       if (view === "attention")
         return (
           matchesFilters && l.status === "active" && l.followUpDate <= today
@@ -308,6 +334,9 @@ export default function LeadDesk() {
     caseFilter,
     stageFilter,
     dueFilter,
+    sourceFilter,
+    methodFilter,
+    tagFilter,
   ]);
 
   function updateType(type: string) {
@@ -323,7 +352,10 @@ export default function LeadDesk() {
     );
     if (duplicate) {
       setShowAdd(false);
-      setSelected(duplicate);
+      setSelected({
+        ...duplicate,
+        caseType: currentCaseType(duplicate.caseType),
+      });
       setNotice(
         "Possible duplicate found. Opened the existing contact instead.",
       );
@@ -338,7 +370,7 @@ export default function LeadDesk() {
         source:
           form.source === "Agent" && form.agentName.trim()
             ? `${AGENT_PREFIX}${form.agentName.trim()}`
-            : form.source,
+            : `${WALK_IN_PREFIX}${form.contactMethod}`,
       }),
     });
     if (r.ok) {
@@ -678,15 +710,63 @@ export default function LeadDesk() {
                 <option value="nodate">No date set</option>
               </select>
             </label>
+            <label>
+              Source
+              <select
+                value={sourceFilter}
+                onChange={(e) => {
+                  setSourceFilter(e.target.value);
+                  if (e.target.value === "Agent") setMethodFilter("all");
+                }}
+              >
+                <option value="all">All sources</option>
+                {sources.map((source) => (
+                  <option key={source}>{source}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Walk In method
+              <select
+                value={methodFilter}
+                onChange={(e) => setMethodFilter(e.target.value)}
+                disabled={sourceFilter === "Agent"}
+              >
+                <option value="all">All methods</option>
+                {walkInMethods.map((method) => (
+                  <option key={method}>{method}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Tag
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+              >
+                <option value="all">All tags</option>
+                {tagOptions.map((tag) => (
+                  <option key={tag.key} value={tag.key}>
+                    {tag.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             {(caseFilter !== "all" ||
               stageFilter !== "all" ||
-              dueFilter !== "all") && (
+              dueFilter !== "all" ||
+              sourceFilter !== "all" ||
+              methodFilter !== "all" ||
+              tagFilter !== "all") && (
               <button
                 type="button"
                 onClick={() => {
                   setCaseFilter("all");
                   setStageFilter("all");
                   setDueFilter("all");
+                  setSourceFilter("all");
+                  setMethodFilter("all");
+                  setTagFilter("all");
                 }}
               >
                 Clear filters
@@ -734,11 +814,14 @@ export default function LeadDesk() {
                         {readTags(lead.tags).map((k) => {
                           const t = tagOptions.find((x) => x.key === k);
                           return t ? (
-                            <i
+                            <span
                               key={k}
-                              className={`tagDot tag-${t.colour}`}
+                              className={`rowTag tag-${t.colour}`}
                               title={t.label}
-                            ></i>
+                            >
+                              <i></i>
+                              {t.label}
+                            </span>
                           ) : null;
                         })}
                       </span>
@@ -748,7 +831,13 @@ export default function LeadDesk() {
                     <small className="typePill">{lead.caseType}</small>
                   </span>
                   <span>
-                    <small className="sourcePill">{lead.source || "—"}</small>
+                    <small className="sourcePill">
+                      {sourceType(lead.source) === "Agent"
+                        ? agentFromSource(lead.source)
+                          ? `Agent · ${agentFromSource(lead.source)}`
+                          : "Agent"
+                        : `Walk In · ${walkInMethodFromSource(lead.source)}`}
+                    </small>
                   </span>
                   <span>
                     <small className="stagePill">{lead.stage}</small>
@@ -843,6 +932,21 @@ export default function LeadDesk() {
                   ))}
                 </select>
               </label>
+              {form.source === "Walk In" && (
+                <label>
+                  Walk In method*
+                  <select
+                    value={form.contactMethod}
+                    onChange={(e) =>
+                      setForm({ ...form, contactMethod: e.target.value })
+                    }
+                  >
+                    {walkInMethods.map((method) => (
+                      <option key={method}>{method}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {form.source === "Agent" && (
                 <label>
                   Agent name*
@@ -1129,7 +1233,10 @@ export default function LeadDesk() {
                     const source = e.target.value;
                     setSelected({
                       ...selected,
-                      source: source === "Agent" ? AGENT_PREFIX : source,
+                      source:
+                        source === "Agent"
+                          ? AGENT_PREFIX
+                          : `${WALK_IN_PREFIX}${walkInMethods[0]}`,
                     });
                   }}
                 >
@@ -1137,6 +1244,24 @@ export default function LeadDesk() {
                     <option key={x}>{x}</option>
                   ))}
                 </select>
+                {sourceType(selected.source) === "Walk In" && (
+                  <label className="agentNameField">
+                    Walk In method
+                    <select
+                      value={walkInMethodFromSource(selected.source)}
+                      onChange={(e) =>
+                        setSelected({
+                          ...selected,
+                          source: `${WALK_IN_PREFIX}${e.target.value}`,
+                        })
+                      }
+                    >
+                      {walkInMethods.map((method) => (
+                        <option key={method}>{method}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {sourceType(selected.source) === "Agent" && (
                   <label className="agentNameField">
                     Agent name
