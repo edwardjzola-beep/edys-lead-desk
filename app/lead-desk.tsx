@@ -34,7 +34,8 @@ type View =
   | "all"
   | "programmes"
   | "partnerships"
-  | "converted";
+  | "converted"
+  | "closed";
 
 const caseTypes = [
   "Student / parent enquiry",
@@ -209,6 +210,13 @@ export default function LeadDesk() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const [completing, setCompleting] = useState<Lead | null>(null);
+  const [completionChoice, setCompletionChoice] = useState<
+    "followup" | "converted" | "closed"
+  >("followup");
+  const [nextFollowUp, setNextFollowUp] = useState("");
+  const [nextFollowUpDate, setNextFollowUpDate] = useState("");
+  const [closeReason, setCloseReason] = useState("No response");
   const [notice, setNotice] = useState("");
   const [online, setOnline] = useState(false);
   const [activitiesList, setActivitiesList] = useState<Activity[]>([]);
@@ -306,6 +314,7 @@ export default function LeadDesk() {
         return matchesFilters && l.status === "active" && Boolean(l.nextAction);
       if (view === "converted")
         return matchesFilters && l.status === "converted";
+      if (view === "closed") return matchesFilters && l.status === "closed";
       if (view === "programmes")
         return (
           matchesFilters &&
@@ -382,35 +391,95 @@ export default function LeadDesk() {
     setNotice("Lead captured. Next action is now tracked.");
     setTimeout(() => setNotice(""), 3200);
   }
-  async function markDone(lead: Lead) {
-    const next = {
-      ...lead,
-      status: "converted",
-      followUpDate: "",
-      nextAction: "Completed",
-    };
+  function startCompletion(
+    lead: Lead,
+    choice: "followup" | "converted" | "closed" = "followup",
+  ) {
+    setCompleting(lead);
+    setCompletionChoice(choice);
+    setNextFollowUp("");
+    setNextFollowUpDate("");
+    setCloseReason("No response");
+  }
+
+  async function recordActivity(leadId: number, kind: string, note: string) {
+    return fetch("/api/activities", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ leadId, kind, note }),
+    });
+  }
+
+  async function completeFollowUp(e: FormEvent) {
+    e.preventDefault();
+    if (!completing) return;
+    if (
+      completionChoice === "followup" &&
+      (!nextFollowUp.trim() || !nextFollowUpDate)
+    ) {
+      setNotice("Add the next action and follow-up date.");
+      setTimeout(() => setNotice(""), 2800);
+      return;
+    }
+
+    const completedNote = completing.nextAction.trim() || "Follow-up action";
+    const activityResponse = await recordActivity(
+      completing.id,
+      "Follow-up completed",
+      completedNote,
+    );
+    if (!activityResponse.ok) {
+      setNotice("Could not record the completed follow-up.");
+      setTimeout(() => setNotice(""), 3200);
+      return;
+    }
+
+    const update =
+      completionChoice === "followup"
+        ? {
+            status: "active",
+            nextAction: nextFollowUp.trim(),
+            followUpDate: nextFollowUpDate,
+          }
+        : completionChoice === "converted"
+          ? { status: "converted", nextAction: "", followUpDate: "" }
+          : { status: "closed", nextAction: "", followUpDate: "" };
     const r = await fetch("/api/leads", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        id: lead.id,
-        status: "converted",
-        nextAction: "Completed",
-        followUpDate: "",
+        id: completing.id,
+        ...update,
       }),
     });
     if (!r.ok) {
-      setNotice("Could not mark this case as converted.");
+      setNotice("The follow-up was recorded, but the lead could not update.");
       setTimeout(() => setNotice(""), 3200);
       return;
     }
     const d = await r.json();
-    const converted = d.lead ?? next;
-    setLeads((x) => x.map((l) => (l.id === lead.id ? converted : l)));
+    const updated = d.lead ?? { ...completing, ...update };
+    if (completionChoice === "closed") {
+      await recordActivity(completing.id, "Lead closed", closeReason);
+    }
+    setLeads((x) => x.map((l) => (l.id === completing.id ? updated : l)));
+    setCompleting(null);
     setSelected(null);
     setActivitiesList([]);
-    setView("converted");
-    setNotice("Lead moved to Converted.");
+    setView(
+      completionChoice === "converted"
+        ? "converted"
+        : completionChoice === "closed"
+          ? "closed"
+          : "todo",
+    );
+    setNotice(
+      completionChoice === "converted"
+        ? "Follow-up completed and lead converted."
+        : completionChoice === "closed"
+          ? "Follow-up completed and lead closed."
+          : "Follow-up completed. The next action is now in your to-do list.",
+    );
     setTimeout(() => setNotice(""), 2800);
   }
   async function saveCase() {
@@ -501,12 +570,6 @@ export default function LeadDesk() {
     setNotice("Contact action added to the timeline.");
     setTimeout(() => setNotice(""), 2800);
   }
-  function openTasks() {
-    setSelected(null);
-    setQuery("");
-    setView("todo");
-  }
-
   return (
     <div className="appShell">
       <aside className="sidebar">
@@ -554,6 +617,12 @@ export default function LeadDesk() {
             onClick={() => setView("converted")}
           >
             <span>✓</span>Converted
+          </button>
+          <button
+            className={view === "closed" ? "active" : ""}
+            onClick={() => setView("closed")}
+          >
+            <span>×</span>Closed
           </button>
           <button
             className={`${view === "attention" ? "active " : ""}${overdue + dueToday > 0 ? "attentionAlert" : ""}`}
@@ -641,7 +710,9 @@ export default function LeadDesk() {
                         ? "Programme pipeline"
                         : view === "partnerships"
                           ? "Partnership pipeline"
-                          : "Converted leads"}
+                          : view === "converted"
+                            ? "Converted leads"
+                            : "Closed leads"}
               </h2>
               <p>
                 {filtered.length}{" "}
@@ -785,15 +856,25 @@ export default function LeadDesk() {
             </div>
             {filtered.length ? (
               filtered.map((lead) => (
-                <button
+                <div
                   className="tableRow leadRow"
                   key={lead.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() =>
                     setSelected({
                       ...lead,
                       caseType: currentCaseType(lead.caseType),
                     })
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      setSelected({
+                        ...lead,
+                        caseType: currentCaseType(lead.caseType),
+                      });
+                    }
+                  }}
                 >
                   <span className="contact">
                     <i>
@@ -852,8 +933,22 @@ export default function LeadDesk() {
                       ? "Today"
                       : lead.followUpDate || "—"}
                   </span>
-                  <span className="arrow">›</span>
-                </button>
+                  <span className="rowControl">
+                    {view === "todo" ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startCompletion(lead);
+                        }}
+                      >
+                        Complete
+                      </button>
+                    ) : (
+                      <span className="arrow">›</span>
+                    )}
+                  </span>
+                </div>
               ))
             ) : (
               <div className="empty">
@@ -1150,7 +1245,9 @@ export default function LeadDesk() {
                     setSelected({ ...selected, followUpDate: e.target.value })
                   }
                 />
-                <button onClick={openTasks}>✓ Open to-do list</button>
+                <button onClick={() => startCompletion(selected)}>
+                  ✓ Complete this action
+                </button>
               </div>
               <form className="activityForm" onSubmit={addActivity}>
                 <label>Record a contact action</label>
@@ -1294,12 +1391,126 @@ export default function LeadDesk() {
                 <button className="secondary" onClick={saveCase}>
                   Save changes
                 </button>
-                <button className="success" onClick={() => markDone(selected)}>
+                <button
+                  className="success"
+                  onClick={() => startCompletion(selected, "converted")}
+                >
                   ✓ Mark converted
                 </button>
               </span>
             </div>
           </div>
+        </div>
+      )}
+      {completing && (
+        <div className="overlay completionOverlay">
+          <form className="completionModal" onSubmit={completeFollowUp}>
+            <div className="modalHead">
+              <div>
+                <p className="eyebrow">COMPLETE FOLLOW-UP</p>
+                <h2>{completing.contactName}</h2>
+                <p>
+                  “{completing.nextAction || "Follow-up action"}” will be
+                  recorded in the contact history.
+                </p>
+              </div>
+              <button type="button" onClick={() => setCompleting(null)}>
+                ×
+              </button>
+            </div>
+            <div className="completionBody">
+              <p className="completionQuestion">What happens next?</p>
+              <div className="completionChoices">
+                <label>
+                  <input
+                    type="radio"
+                    name="completionChoice"
+                    checked={completionChoice === "followup"}
+                    onChange={() => setCompletionChoice("followup")}
+                  />
+                  Set next follow-up
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="completionChoice"
+                    checked={completionChoice === "converted"}
+                    onChange={() => setCompletionChoice("converted")}
+                  />
+                  Mark converted
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="completionChoice"
+                    checked={completionChoice === "closed"}
+                    onChange={() => setCompletionChoice("closed")}
+                  />
+                  Close lead
+                </label>
+              </div>
+              {completionChoice === "followup" && (
+                <div className="completionFields">
+                  <label>
+                    Next action*
+                    <input
+                      required
+                      value={nextFollowUp}
+                      onChange={(e) => setNextFollowUp(e.target.value)}
+                      placeholder="What must happen next?"
+                    />
+                  </label>
+                  <label>
+                    Follow-up date*
+                    <input
+                      required
+                      type="date"
+                      value={nextFollowUpDate}
+                      onChange={(e) => setNextFollowUpDate(e.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+              {completionChoice === "converted" && (
+                <div className="completionMessage successMessage">
+                  This lead will move to Converted and leave the active to-do
+                  list.
+                </div>
+              )}
+              {completionChoice === "closed" && (
+                <label className="closeReason">
+                  Reason for closing
+                  <select
+                    value={closeReason}
+                    onChange={(e) => setCloseReason(e.target.value)}
+                  >
+                    <option>No response</option>
+                    <option>Chose another school</option>
+                    <option>Not eligible</option>
+                    <option>Timing changed</option>
+                    <option>Duplicate</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+              )}
+            </div>
+            <div className="modalFoot">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setCompleting(null)}
+              >
+                Cancel
+              </button>
+              <button className="primary">
+                {completionChoice === "followup"
+                  ? "Save next follow-up"
+                  : completionChoice === "converted"
+                    ? "Complete and convert"
+                    : "Complete and close"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
       {notice && <div className="toast">✓ {notice}</div>}
