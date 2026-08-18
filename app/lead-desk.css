@@ -642,6 +642,22 @@ body {
 .work .leadRow {
   width: 100%;
 }
+.work .tableRow {
+  grid-template-columns: 1.25fr 1fr 0.95fr 0.85fr 1.35fr 0.65fr 20px;
+}
+.sourcePill {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #eef4f5;
+  color: #23616a;
+  padding: 5px 7px;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .work .empty {
   display: grid;
   width: 100%;
@@ -710,8 +726,17 @@ body {
 .caseView .drawerBody > .detail:nth-of-type(8) {
   grid-area: 7 / 1;
 }
-.caseView .drawerBody > .detail:nth-of-type(9) {
-  grid-area: 8 / 1;
+.editDetail input {
+  width: 100%;
+  border: 1px solid #d8cec1;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  padding: 10px 11px;
+  font-size: 13px;
+}
+.agentNameField {
+  margin-top: 12px;
 }
 .caseView .drawerFoot {
   flex: none;
@@ -874,11 +899,11 @@ body {
   .tagLegend > div:first-child {
     min-width: 0;
   }
-  .tableRow {
-    grid-template-columns: 1.25fr 1fr 1.35fr 0.7fr;
+  .work .tableRow {
+    grid-template-columns: 1.25fr 0.95fr 0.85fr 1.35fr 0.65fr;
   }
-  .tableRow > span:nth-child(2),
-  .tableRow > span:nth-child(6) {
+  .work .tableRow > span:nth-child(2),
+  .work .tableRow > span:nth-child(7) {
     display: none;
   }
 }
@@ -900,7 +925,7 @@ body {
     display: none;
   }
   .sidebar nav {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 3px;
     height: 100%;
     padding: 0;
@@ -958,14 +983,14 @@ body {
   .search input {
     width: 100%;
   }
-  .tableRow {
-    grid-template-columns: 1.15fr 1.25fr 0.65fr;
+  .work .tableRow {
+    grid-template-columns: 1.2fr 0.9fr 1.2fr 0.65fr;
     gap: 10px;
     padding: 14px;
   }
-  .tableRow > span:nth-child(2),
-  .tableRow > span:nth-child(3),
-  .tableRow > span:nth-child(6) {
+  .work .tableRow > span:nth-child(2),
+  .work .tableRow > span:nth-child(4),
+  .work .tableRow > span:nth-child(7) {
     display: none;
   }
   .contact i {
@@ -1016,8 +1041,11 @@ body {
   .sectionHead {
     padding: 17px 14px;
   }
-  .tableRow {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.15fr) 0.65fr;
+  .work .tableRow {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.85fr) minmax(
+        0,
+        1.1fr
+      ) 0.65fr;
     gap: 8px;
     padding: 13px 10px;
   }
