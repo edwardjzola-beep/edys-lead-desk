@@ -197,9 +197,58 @@ function readTags(value: string | undefined) {
   }
 }
 
+function ContactCell({ lead }: { lead: Lead }) {
+  return (
+    <span className="contact">
+      <i>
+        {lead.contactName
+          .split(" ")
+          .map((x) => x[0])
+          .join("")
+          .slice(0, 2)}
+      </i>
+      <b>
+        {lead.contactName}
+        <small>
+          {lead.organization || lead.country || "Individual enquiry"}
+        </small>
+        <span className="rowTags">
+          {readTags(lead.tags).map((key) => {
+            const tag = tagOptions.find((option) => option.key === key);
+            return tag ? (
+              <span
+                key={key}
+                className={`rowTag tag-${tag.colour}`}
+                title={tag.label}
+              >
+                <i></i>
+                {tag.label}
+              </span>
+            ) : null;
+          })}
+        </span>
+      </b>
+    </span>
+  );
+}
+
+function SourceCell({ lead }: { lead: Lead }) {
+  return (
+    <span>
+      <small className="sourcePill">
+        {sourceType(lead.source) === "Agent"
+          ? agentFromSource(lead.source)
+            ? `Agent · ${agentFromSource(lead.source)}`
+            : "Agent"
+          : `Walk In · ${walkInMethodFromSource(lead.source)}`}
+      </small>
+    </span>
+  );
+}
+
 export default function LeadDesk() {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [view, setView] = useState<View>("todo");
+  const [view, setView] = useState<View>("all");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(makeBlank);
   const [query, setQuery] = useState("");
@@ -845,19 +894,35 @@ export default function LeadDesk() {
             )}
           </div>
           <div className="table">
-            <div className="tableRow tableHeader">
-              <span>Contact</span>
-              <span>Case</span>
-              <span>Source</span>
-              <span>Stage</span>
-              <span>Next action</span>
-              <span>Due</span>
-              <span></span>
+            <div
+              className={`tableRow tableHeader ${view === "todo" ? "todoRow" : ""}`}
+            >
+              {view === "todo" ? (
+                <>
+                  <span>Due</span>
+                  <span>Follow-up action</span>
+                  <span>Contact</span>
+                  <span>Case</span>
+                  <span>Source</span>
+                  <span>Stage</span>
+                  <span></span>
+                </>
+              ) : (
+                <>
+                  <span>Contact</span>
+                  <span>Case</span>
+                  <span>Source</span>
+                  <span>Stage</span>
+                  <span>Next action</span>
+                  <span>Due</span>
+                  <span></span>
+                </>
+              )}
             </div>
             {filtered.length ? (
               filtered.map((lead) => (
                 <div
-                  className="tableRow leadRow"
+                  className={`tableRow leadRow ${view === "todo" ? "todoRow" : ""}`}
                   key={lead.id}
                   role="button"
                   tabIndex={0}
@@ -876,63 +941,49 @@ export default function LeadDesk() {
                     }
                   }}
                 >
-                  <span className="contact">
-                    <i>
-                      {lead.contactName
-                        .split(" ")
-                        .map((x) => x[0])
-                        .join("")
-                        .slice(0, 2)}
-                    </i>
-                    <b>
-                      {lead.contactName}
-                      <small>
-                        {lead.organization ||
-                          lead.country ||
-                          "Individual enquiry"}
-                      </small>
-                      <span className="rowTags">
-                        {readTags(lead.tags).map((k) => {
-                          const t = tagOptions.find((x) => x.key === k);
-                          return t ? (
-                            <span
-                              key={k}
-                              className={`rowTag tag-${t.colour}`}
-                              title={t.label}
-                            >
-                              <i></i>
-                              {t.label}
-                            </span>
-                          ) : null;
-                        })}
+                  {view === "todo" ? (
+                    <>
+                      <span
+                        className={
+                          lead.followUpDate < today ? "date overdue" : "date"
+                        }
+                      >
+                        {lead.followUpDate === today
+                          ? "Today"
+                          : lead.followUpDate || "—"}
                       </span>
-                    </b>
-                  </span>
-                  <span>
-                    <small className="typePill">{lead.caseType}</small>
-                  </span>
-                  <span>
-                    <small className="sourcePill">
-                      {sourceType(lead.source) === "Agent"
-                        ? agentFromSource(lead.source)
-                          ? `Agent · ${agentFromSource(lead.source)}`
-                          : "Agent"
-                        : `Walk In · ${walkInMethodFromSource(lead.source)}`}
-                    </small>
-                  </span>
-                  <span>
-                    <small className="stagePill">{lead.stage}</small>
-                  </span>
-                  <span className="actionCell">{lead.nextAction}</span>
-                  <span
-                    className={
-                      lead.followUpDate < today ? "date overdue" : "date"
-                    }
-                  >
-                    {lead.followUpDate === today
-                      ? "Today"
-                      : lead.followUpDate || "—"}
-                  </span>
+                      <span className="actionCell">{lead.nextAction}</span>
+                      <ContactCell lead={lead} />
+                      <span>
+                        <small className="typePill">{lead.caseType}</small>
+                      </span>
+                      <SourceCell lead={lead} />
+                      <span>
+                        <small className="stagePill">{lead.stage}</small>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ContactCell lead={lead} />
+                      <span>
+                        <small className="typePill">{lead.caseType}</small>
+                      </span>
+                      <SourceCell lead={lead} />
+                      <span>
+                        <small className="stagePill">{lead.stage}</small>
+                      </span>
+                      <span className="actionCell">{lead.nextAction}</span>
+                      <span
+                        className={
+                          lead.followUpDate < today ? "date overdue" : "date"
+                        }
+                      >
+                        {lead.followUpDate === today
+                          ? "Today"
+                          : lead.followUpDate || "—"}
+                      </span>
+                    </>
+                  )}
                   <span className="rowControl">
                     {view === "todo" ? (
                       <button
