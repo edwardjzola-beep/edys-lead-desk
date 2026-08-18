@@ -28,24 +28,30 @@ type Activity = {
   note: string;
   createdAt: string;
 };
-type View = "attention" | "todo" | "all" | "programmes" | "partnerships";
+type View =
+  | "attention"
+  | "todo"
+  | "all"
+  | "programmes"
+  | "partnerships"
+  | "converted";
 
 const caseTypes = [
   "Student / parent enquiry",
-  "Walk-in enquiry",
   "Agent partnership",
   "School partnership",
   "Exchange / immersion",
   "Campus / group visit",
-  "General business lead",
 ];
 const sources = [
   "Outlook email",
   "Website form",
   "WhatsApp",
-  "Walk-in / phone",
+  "Walk-in",
+  "Agent",
+  "Phone",
   "Social media",
-  "Staff / agent referral",
+  "Staff referral",
 ];
 const tagOptions = [
   {
@@ -99,16 +105,6 @@ const stageMap: Record<string, string[]> = {
     "Enrolled",
     "Joined",
   ],
-  "Walk-in enquiry": [
-    "New enquiry",
-    "Replied",
-    "Documents requested",
-    "Test proposed",
-    "Placement test booked",
-    "Application fee paid",
-    "Enrolled",
-    "Joined",
-  ],
   "Agent partnership": [
     "New lead",
     "Contacted",
@@ -147,14 +143,6 @@ const stageMap: Record<string, string[]> = {
     "Programme confirmed",
     "Completed",
   ],
-  "General business lead": [
-    "New lead",
-    "Contacted",
-    "Meeting proposed",
-    "Meeting completed",
-    "Negotiating",
-    "Converted",
-  ],
 };
 
 function makeBlank() {
@@ -168,6 +156,7 @@ function makeBlank() {
     country: "",
     caseType: caseTypes[0],
     source: sources[0],
+    agentName: "",
     stage: "New enquiry",
     nextAction: "Reply to enquiry",
     followUpDate: d.toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" }),
@@ -175,6 +164,15 @@ function makeBlank() {
     emailDraft: "",
     tags: "[]",
   };
+}
+const AGENT_PREFIX = "Agent · ";
+function sourceType(source: string) {
+  return source.startsWith(AGENT_PREFIX) ? "Agent" : source;
+}
+function agentFromSource(source: string) {
+  return source.startsWith(AGENT_PREFIX)
+    ? source.slice(AGENT_PREFIX.length)
+    : "";
 }
 function readTags(value: string | undefined) {
   try {
@@ -240,6 +238,9 @@ export default function LeadDesk() {
   const dueToday = leads.filter(
     (l) => l.status === "active" && l.followUpDate === today,
   ).length;
+  const agentNames = Array.from(
+    new Set(leads.map((lead) => agentFromSource(lead.source)).filter(Boolean)),
+  ).sort();
   const availableStages =
     caseFilter === "all"
       ? Array.from(new Set(leads.map((lead) => lead.stage))).sort()
@@ -272,14 +273,21 @@ export default function LeadDesk() {
         );
       if (view === "todo")
         return matchesFilters && l.status === "active" && Boolean(l.nextAction);
+      if (view === "converted")
+        return matchesFilters && l.status === "converted";
       if (view === "programmes")
         return (
           matchesFilters &&
+          l.status === "active" &&
           ["Exchange / immersion", "Campus / group visit"].includes(l.caseType)
         );
       if (view === "partnerships")
-        return matchesFilters && l.caseType.includes("partnership");
-      return matchesFilters;
+        return (
+          matchesFilters &&
+          l.status === "active" &&
+          l.caseType.includes("partnership")
+        );
+      return matchesFilters && l.status === "active";
     });
     return view === "todo"
       ? [...rows].sort((a, b) =>
@@ -320,7 +328,13 @@ export default function LeadDesk() {
     const r = await fetch("/api/leads", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        source:
+          form.source === "Agent" && form.agentName.trim()
+            ? `${AGENT_PREFIX}${form.agentName.trim()}`
+            : form.source,
+      }),
     });
     if (r.ok) {
       const d = await r.json();
@@ -331,20 +345,36 @@ export default function LeadDesk() {
     setNotice("Lead captured. Next action is now tracked.");
     setTimeout(() => setNotice(""), 3200);
   }
-  function markDone(lead: Lead) {
+  async function markDone(lead: Lead) {
     const next = {
       ...lead,
       status: "converted",
       followUpDate: "",
       nextAction: "Completed",
     };
-    setLeads((x) => x.map((l) => (l.id === lead.id ? next : l)));
-    setSelected(next);
-    fetch("/api/leads", {
+    const r = await fetch("/api/leads", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: lead.id, status: "converted" }),
+      body: JSON.stringify({
+        id: lead.id,
+        status: "converted",
+        nextAction: "Completed",
+        followUpDate: "",
+      }),
     });
+    if (!r.ok) {
+      setNotice("Could not mark this case as converted.");
+      setTimeout(() => setNotice(""), 3200);
+      return;
+    }
+    const d = await r.json();
+    const converted = d.lead ?? next;
+    setLeads((x) => x.map((l) => (l.id === lead.id ? converted : l)));
+    setSelected(null);
+    setActivitiesList([]);
+    setView("converted");
+    setNotice("Lead moved to Converted.");
+    setTimeout(() => setNotice(""), 2800);
   }
   async function saveCase() {
     if (!selected) return;
@@ -365,7 +395,6 @@ export default function LeadDesk() {
         nextAction: selected.nextAction,
         followUpDate: selected.followUpDate,
         summary: selected.summary,
-        emailDraft: selected.emailDraft,
         tags: selected.tags,
       }),
     });
@@ -376,8 +405,9 @@ export default function LeadDesk() {
     }
     const d = await r.json();
     const saved = d.lead ?? selected;
-    setSelected(saved);
     setLeads((x) => x.map((l) => (l.id === saved.id ? saved : l)));
+    setSelected(null);
+    setActivitiesList([]);
     setNotice("Contact and case details updated.");
     setTimeout(() => setNotice(""), 2800);
   }
@@ -483,6 +513,15 @@ export default function LeadDesk() {
             <span>⌁</span>Partnerships
           </button>
           <button
+            className={view === "converted" ? "active" : ""}
+            onClick={() => setView("converted")}
+          >
+            <span>✓</span>Converted{" "}
+            <em>
+              {leads.filter((lead) => lead.status === "converted").length}
+            </em>
+          </button>
+          <button
             className={`${view === "attention" ? "active " : ""}${overdue + dueToday > 0 ? "attentionAlert" : ""}`}
             onClick={() => setView("attention")}
           >
@@ -566,7 +605,9 @@ export default function LeadDesk() {
                       ? "All cases"
                       : view === "programmes"
                         ? "Programme pipeline"
-                        : "Partnership pipeline"}
+                        : view === "partnerships"
+                          ? "Partnership pipeline"
+                          : "Converted leads"}
               </h2>
               <p>
                 {filtered.length}{" "}
@@ -654,6 +695,7 @@ export default function LeadDesk() {
             <div className="tableRow tableHeader">
               <span>Contact</span>
               <span>Case</span>
+              <span>Source</span>
               <span>Stage</span>
               <span>Next action</span>
               <span>Due</span>
@@ -697,6 +739,9 @@ export default function LeadDesk() {
                   </span>
                   <span>
                     <small className="typePill">{lead.caseType}</small>
+                  </span>
+                  <span>
+                    <small className="sourcePill">{lead.source || "—"}</small>
                   </span>
                   <span>
                     <small className="stagePill">{lead.stage}</small>
@@ -777,13 +822,39 @@ export default function LeadDesk() {
                 Source*
                 <select
                   value={form.source}
-                  onChange={(e) => setForm({ ...form, source: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      source: e.target.value,
+                      agentName:
+                        e.target.value === "Agent" ? form.agentName : "",
+                    })
+                  }
                 >
                   {sources.map((x) => (
                     <option key={x}>{x}</option>
                   ))}
                 </select>
               </label>
+              {form.source === "Agent" && (
+                <label>
+                  Agent name*
+                  <input
+                    required
+                    list="capture-agent-names"
+                    value={form.agentName}
+                    onChange={(e) =>
+                      setForm({ ...form, agentName: e.target.value })
+                    }
+                    placeholder="Type or select an agent"
+                  />
+                  <datalist id="capture-agent-names">
+                    {agentNames.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </label>
+              )}
               <label>
                 Country
                 <input
@@ -1023,25 +1094,6 @@ export default function LeadDesk() {
                 />
               </div>
               <div className="detail editDetail">
-                <label>Email reply draft</label>
-                <textarea
-                  value={selected.emailDraft}
-                  onChange={(e) =>
-                    setSelected({ ...selected, emailDraft: e.target.value })
-                  }
-                  placeholder="Save the reply draft here, then copy it to Outlook."
-                />
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selected.emailDraft);
-                    setNotice("Email draft copied for Outlook.");
-                    setTimeout(() => setNotice(""), 2800);
-                  }}
-                >
-                  Copy draft
-                </button>
-              </div>
-              <div className="detail editDetail">
                 <label>Case type</label>
                 <select
                   value={selected.caseType}
@@ -1062,15 +1114,41 @@ export default function LeadDesk() {
               <div className="detail editDetail">
                 <label>Source</label>
                 <select
-                  value={selected.source}
-                  onChange={(e) =>
-                    setSelected({ ...selected, source: e.target.value })
-                  }
+                  value={sourceType(selected.source)}
+                  onChange={(e) => {
+                    const source = e.target.value;
+                    setSelected({
+                      ...selected,
+                      source: source === "Agent" ? AGENT_PREFIX : source,
+                    });
+                  }}
                 >
                   {sources.map((x) => (
                     <option key={x}>{x}</option>
                   ))}
                 </select>
+                {sourceType(selected.source) === "Agent" && (
+                  <label className="agentNameField">
+                    Agent name
+                    <input
+                      required
+                      list="edit-agent-names"
+                      value={agentFromSource(selected.source)}
+                      onChange={(e) =>
+                        setSelected({
+                          ...selected,
+                          source: `${AGENT_PREFIX}${e.target.value}`,
+                        })
+                      }
+                      placeholder="Type or select an agent"
+                    />
+                    <datalist id="edit-agent-names">
+                      {agentNames.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                  </label>
+                )}
               </div>
             </div>
             <div className="drawerFoot">
