@@ -251,7 +251,7 @@ function SourceCell({ lead }: { lead: Lead }) {
           ? agentFromSource(lead.source)
             ? `Agent · ${agentFromSource(lead.source)}`
             : "Agent"
-          : `Walk In · ${walkInMethodFromSource(lead.source)}`}
+          : `Walk-in · ${walkInMethodFromSource(lead.source)}`}
       </small>
     </span>
   );
@@ -270,6 +270,10 @@ export default function LeadDesk() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [applicationFilter, setApplicationFilter] = useState("all");
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [caseTab, setCaseTab] = useState<"overview" | "activity" | "details">(
+    "overview",
+  );
   const [selected, setSelected] = useState<Lead | null>(null);
   const [completing, setCompleting] = useState<Lead | null>(null);
   const [completionChoice, setCompletionChoice] = useState<
@@ -300,6 +304,20 @@ export default function LeadDesk() {
       month: "long",
     })
     .toUpperCase();
+  const singaporeHour = Number(
+    new Intl.DateTimeFormat("en-SG", {
+      timeZone: "Asia/Singapore",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  );
+  const greeting =
+    singaporeHour < 12
+      ? "Good morning"
+      : singaporeHour < 18
+        ? "Good afternoon"
+        : "Good evening";
+  const monthStart = `${today.slice(0, 7)}-01`;
 
   useEffect(() => {
     fetch("/api/leads")
@@ -312,6 +330,7 @@ export default function LeadDesk() {
   }, []);
   useEffect(() => {
     if (!selectedId) return;
+    setCaseTab("overview");
     fetch(`/api/activities?leadId=${selectedId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setActivitiesList(d.activities ?? []))
@@ -324,9 +343,26 @@ export default function LeadDesk() {
   const dueToday = leads.filter(
     (l) => l.status === "active" && l.followUpDate === today,
   ).length;
-  const capturedSinceStart = leads.filter(
-    (lead) => lead.createdAt.slice(0, 10) >= "2026-08-17",
+  const capturedThisMonth = leads.filter(
+    (lead) => lead.createdAt.slice(0, 10) >= monthStart,
   ).length;
+
+  function formatDate(date: string) {
+    if (!date) return "—";
+    return new Date(`${date}T00:00:00+08:00`).toLocaleDateString("en-SG", {
+      timeZone: "Asia/Singapore",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function dueState(date: string) {
+    if (!date) return "none";
+    if (date < today) return "overdue";
+    if (date === today) return "today";
+    return "later";
+  }
   const agentNames = Array.from(
     new Set(leads.map((lead) => agentFromSource(lead.source)).filter(Boolean)),
   ).sort();
@@ -792,7 +828,7 @@ export default function LeadDesk() {
         <header>
           <div>
             <p className="eyebrow">{todayLabel}</p>
-            <h1>Good morning, Edy.</h1>
+            <h1>{greeting}, Edy.</h1>
             <p>
               Here’s what needs your attention before any lead slips through.
             </p>
@@ -814,8 +850,14 @@ export default function LeadDesk() {
           </article>
           <article>
             <span>NEW THIS MONTH</span>
-            <strong>{capturedSinceStart}</strong>
-            <p>Captured since 17 August</p>
+            <strong>{capturedThisMonth}</strong>
+            <p>
+              Captured since 1{" "}
+              {new Date(`${monthStart}T00:00:00+08:00`).toLocaleDateString(
+                "en-SG",
+                { month: "long", timeZone: "Asia/Singapore" },
+              )}
+            </p>
           </article>
           <article>
             <span>UPCOMING PROGRAMMES</span>
@@ -825,15 +867,22 @@ export default function LeadDesk() {
             <p>Formally confirmed</p>
           </article>
         </section>
-        <section className="tagLegend">
-          <div>
-            <span className="legendTitle">TAG LEGEND</span>
-            <small>
-              Use tags as quick visual markers. They do not change the pipeline
-              stage.
-            </small>
+        <section className={`tagLegend ${legendOpen ? "isOpen" : ""}`}>
+          <div className="legendSummary">
+            <div>
+              <span className="legendTitle">TAG GUIDE</span>
+              <small>Quick visual markers for priority and follow-up.</small>
+            </div>
+            <button
+              type="button"
+              aria-expanded={legendOpen}
+              onClick={() => setLegendOpen((open) => !open)}
+            >
+              {legendOpen ? "Hide guide" : "Show guide"}
+              <span aria-hidden="true">{legendOpen ? "−" : "+"}</span>
+            </button>
           </div>
-          <div className="legendItems">
+          <div className="legendItems" hidden={!legendOpen}>
             {tagOptions.map((t) => (
               <span key={t.key} className={`legendItem tag-${t.colour}`}>
                 <i></i>
@@ -939,12 +988,14 @@ export default function LeadDesk() {
               >
                 <option value="all">All sources</option>
                 {sources.map((source) => (
-                  <option key={source}>{source}</option>
+                  <option key={source} value={source}>
+                    {source === "Walk In" ? "Walk-in" : source}
+                  </option>
                 ))}
               </select>
             </label>
             <label>
-              Walk In method
+              Walk-in method
               <select
                 value={methodFilter}
                 onChange={(e) => setMethodFilter(e.target.value)}
@@ -1055,13 +1106,11 @@ export default function LeadDesk() {
                   {view === "todo" ? (
                     <>
                       <span
-                        className={
-                          lead.followUpDate < today ? "date overdue" : "date"
-                        }
+                        className={`date ${dueState(lead.followUpDate)}`}
                       >
                         {lead.followUpDate === today
                           ? "Today"
-                          : lead.followUpDate || "—"}
+                          : formatDate(lead.followUpDate)}
                       </span>
                       <span className="actionCell">{lead.nextAction}</span>
                       <ContactCell lead={lead} />
@@ -1085,13 +1134,11 @@ export default function LeadDesk() {
                       </span>
                       <span className="actionCell">{lead.nextAction}</span>
                       <span
-                        className={
-                          lead.followUpDate < today ? "date overdue" : "date"
-                        }
+                        className={`date ${dueState(lead.followUpDate)}`}
                       >
                         {lead.followUpDate === today
                           ? "Today"
-                          : lead.followUpDate || "—"}
+                          : formatDate(lead.followUpDate)}
                       </span>
                     </>
                   )}
@@ -1185,13 +1232,15 @@ export default function LeadDesk() {
                   }
                 >
                   {sources.map((x) => (
-                    <option key={x}>{x}</option>
+                    <option key={x} value={x}>
+                      {x === "Walk In" ? "Walk-in" : x}
+                    </option>
                   ))}
                 </select>
               </label>
               {form.source === "Walk In" && (
                 <label>
-                  Walk In method*
+                  Walk-in method*
                   <select
                     value={form.contactMethod}
                     onChange={(e) =>
@@ -1307,7 +1356,26 @@ export default function LeadDesk() {
                 {selected.country || selected.source}
               </p>
             </div>
+            <nav className="caseTabs" aria-label="Case sections">
+              {(["overview", "activity", "details"] as const).map((tab) => (
+                <button
+                  type="button"
+                  key={tab}
+                  className={caseTab === tab ? "active" : ""}
+                  aria-current={caseTab === tab ? "page" : undefined}
+                  onClick={() => setCaseTab(tab)}
+                >
+                  {tab === "overview"
+                    ? "Overview"
+                    : tab === "activity"
+                      ? `Activity${activitiesList.length ? ` (${activitiesList.length})` : ""}`
+                      : "Details"}
+                </button>
+              ))}
+            </nav>
             <div className="drawerBody">
+              {caseTab === "overview" && (
+                <div className="caseTabPanel overviewPanel">
               <div className="contactEditor">
                 <label>
                   Contact name*
@@ -1423,6 +1491,10 @@ export default function LeadDesk() {
                   ✓ Complete this action
                 </button>
               </div>
+                </div>
+              )}
+              {caseTab === "activity" && (
+                <div className="caseTabPanel activityPanel">
               <form className="activityForm" onSubmit={addActivity}>
                 <label>Record a contact action</label>
                 <div>
@@ -1468,6 +1540,10 @@ export default function LeadDesk() {
                   <p className="noActivity">No recorded actions yet.</p>
                 )}
               </div>
+                </div>
+              )}
+              {caseTab === "details" && (
+                <div className="caseTabPanel detailsPanel">
               <div className="detail editDetail">
                 <label>Conversation summary</label>
                 <textarea
@@ -1539,13 +1615,15 @@ export default function LeadDesk() {
                       }}
                     >
                       {sources.map((x) => (
-                        <option key={x}>{x}</option>
+                        <option key={x} value={x}>
+                          {x === "Walk In" ? "Walk-in" : x}
+                        </option>
                       ))}
                     </select>
                   </label>
                   {sourceType(selected.source) === "Walk In" && (
                     <label>
-                      Walk In method
+                      Walk-in method
                       <select
                         value={walkInMethodFromSource(selected.source)}
                         onChange={(e) =>
@@ -1585,6 +1663,8 @@ export default function LeadDesk() {
                   )}
                 </div>
               </div>
+                </div>
+              )}
             </div>
             <div className="drawerFoot">
               <button className="danger" onClick={deleteCase}>
