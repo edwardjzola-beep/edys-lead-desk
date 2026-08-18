@@ -996,7 +996,7 @@ export default function LeadDesk() {
                           startCompletion(lead);
                         }}
                       >
-                        Complete
+                        ✓ Done
                       </button>
                     ) : (
                       <span className="arrow">›</span>
