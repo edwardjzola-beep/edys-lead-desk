@@ -746,6 +746,64 @@ body {
 .caseView .detailPair {
   grid-area: 2 / 1;
 }
+.stageCard {
+  border: 1px solid #d9912b66;
+  border-left: 5px solid var(--amber);
+  border-radius: 12px;
+  background: #fff8ed;
+  padding: 16px;
+  box-shadow: 0 5px 18px #d9912b14;
+}
+.stageCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.stageCardHead span,
+.metadataTitle {
+  display: block;
+  color: #946019;
+  letter-spacing: 0.12em;
+  font-size: 9px;
+  font-weight: 850;
+}
+.stageCardHead strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--navy);
+  font-size: 17px;
+}
+.stageCardHead small {
+  border-radius: 999px;
+  background: #d9912b1f;
+  color: #946019;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-weight: 750;
+}
+.stageControls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+}
+.stageControls select {
+  min-width: 0;
+}
+.stageControls button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+  cursor: pointer;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.stageControls button:hover {
+  background: var(--teal);
+}
 .caseView .tagPicker {
   grid-area: 3 / 1;
 }
@@ -778,6 +836,39 @@ body {
 }
 .agentNameField {
   margin-top: 12px;
+}
+.metadataCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbf8f3;
+  padding: 16px;
+}
+.metadataTitle {
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.metadataGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px;
+}
+.metadataGrid label {
+  display: grid;
+  gap: 7px;
+  color: #626b65;
+  font-size: 11px;
+  font-weight: 700;
+}
+.metadataGrid select,
+.metadataGrid input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d8cec1;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  padding: 10px 11px;
+  font-size: 12px;
 }
 .caseView .drawerFoot {
   flex: none;
@@ -863,6 +954,10 @@ body {
   }
   .contactEditor label:last-child {
     grid-column: auto;
+  }
+  .stageControls,
+  .metadataGrid {
+    grid-template-columns: 1fr;
   }
   .drawerFoot {
     align-items: stretch;
